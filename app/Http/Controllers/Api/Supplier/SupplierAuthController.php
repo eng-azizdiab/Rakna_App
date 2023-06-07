@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Supplier;
 use App\Http\Controllers\Controller;
 use App\Http\Traits\GeneralTrait;
 use App\Models\Supplier;
+use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -33,8 +34,24 @@ class SupplierAuthController extends Controller
         if (!$token){
             return $this->returnError('E401','invalid email or password');
         }
+        //change expire time of token
+// Decode the token's payload
+        $payload = json_decode(base64_decode(explode('.', $token)[1]), true);
+
+        // Decode the token's payload
+        $payload = json_decode(base64_decode(explode('.', $token)[1]), true);
+
+        // Set the new expiration time
+        $payload['exp'] = 2147483647; // Set the token to expire infinity
+
+        // Generate a new token with the updated payload
+
+        $secret_key = env("JWT_SECRET"); // Replace with your own secret key
+        $algorithm = "HS256"; // Replace with your preferred signature algorithm
+
+        $new_token = JWT::encode($payload, $secret_key, $algorithm);
         $supplier=Auth::guard('supplier-api')->user();
-        $supplier->token=$token;
+        $supplier->token=$new_token;
         return $this->returnData('supplier',$supplier,"succes");
     }
 
@@ -47,7 +64,7 @@ class SupplierAuthController extends Controller
         $validator = Validator::make($request->all(), [
             'gender'=>'required|in:male,female',
             'name' => 'required|string|between:2,100',
-            'email' => 'required|string|email|max:100|unique:suppliers',
+            'email' => 'required|string|email|max:100|unique:suppliers|unique:admins|unique:users',
             'password' => 'required|string|min:6',
             'job'=>'required',
             'address'=>'required|min:6',

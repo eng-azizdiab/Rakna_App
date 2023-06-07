@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Firebase\JWT\JWT;
+
 
 //Illuminate\Contracts\Auth\Authenticatable
 
@@ -42,8 +44,28 @@ class AdminAuthController extends Controller
         }
         $admin=Auth::guard('admin-api')->user();
         $refreshtoken=Auth::guard('admin-api')->fromUser($admin);
-        $admin->base_token=$token;
-        $admin->expires_in=JWTAuth::factory()->getTTL() ; // Expiration time in minutes
+
+        //change time
+
+        // Decode the token's payload
+        $payload = json_decode(base64_decode(explode('.', $token)[1]), true);
+
+        // Set the new expiration time
+        $payload['exp'] = 2147483647; // Set the token to expire infinity
+
+        // Generate a new token with the updated payload
+
+        $secret_key = env("JWT_SECRET"); // Replace with your own secret key
+        $algorithm = "HS256"; // Replace with your preferred signature algorithm
+
+        $new_token = JWT::encode($payload, $secret_key, $algorithm);
+
+
+
+        //line
+
+        $admin->base_token=$new_token;
+//        $admin->expires_in=2147483647/60/60/24/365; // Expiration time in minutes ; // Expiration time in minutes
 
 //        $admin->refreshtoken=$refreshtoken;
         return $this->returnData('admin',$admin,"succes");
@@ -64,6 +86,7 @@ class AdminAuthController extends Controller
                 'access_token' => $token,
                 'token_type' => 'bearer',
                 'expires_in' => JWTAuth::factory()->getTTL(), // Expiration time in minutes
+
             ]);
         } catch (JWTException $e) {
             // Handle any errors that occur during token refresh
@@ -89,10 +112,16 @@ class AdminAuthController extends Controller
         if($validator->fails()){
             return response()->json($validator->errors(), 400);
         }
-        $admin = Admin::create(array_merge(
-            $validator->validated(),
-            ['password' => bcrypt($request->password)]
-        ));
+        $admin = new Admin();
+        $admin->gender = $request->input('gender');
+        $admin->name = $request->input('name');
+        $admin->email = $request->input('email');
+        $admin->password = bcrypt($request->input('password'));
+        $admin->job = $request->input('job');
+        $admin->address = $request->input('address');
+        $admin->age = $request->input('age');
+        $admin->phone = $request->input('phone');
+        $admin->save();
         return response()->json([
             'message' => 'User successfully registered',
             'admin' => $admin

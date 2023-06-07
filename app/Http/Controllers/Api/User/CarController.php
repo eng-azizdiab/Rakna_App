@@ -35,4 +35,13 @@ class CarController extends Controller
             return $this->returnError("404","Car doesn't exist");
         }
     }
+
+    public function car_Data(){
+        $cars=Car::where('user_id',Auth::guard('user-api')->user()->id)->get();
+        if ($cars){
+            return $this->returnData('cars',$cars);
+        }else{
+            return $this->returnError("404","user does not add any car");
+        }
+    }
 }

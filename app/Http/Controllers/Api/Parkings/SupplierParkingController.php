@@ -146,5 +146,139 @@ class SupplierParkingController extends Controller
 
     }
 
+    public function profits_Monthly(){
+
+        $start_date = now()->subMonth()->startOfDay();
+        $end_date = now()->endOfDay();
+//        $parking_id = $request->parking_id; // replace with the desired parking ID
+        $supplier_id=Auth::guard('supplier-api')->user()->id;
+        $parking_id=Parking::where('supplier_id',$supplier_id)->select('id')->first();
+        if ($parking_id) {
+            $dates_with_profits = Payment::select(DB::raw('DATE(created_at) as date_only'), DB::raw('SUM(cost) as total_cost'))
+                ->where('parking_id', $parking_id->id)
+                ->whereBetween('created_at', [$start_date, $end_date])
+                ->groupBy('date_only')
+                ->get();
+
+            $dates = [];
+            $date = Carbon::today();
+            $oneMonthAgo = Carbon::today()->subMonth();
+
+            while ($date->gte($oneMonthAgo)) {
+                $dates[] = $date->format('Y-m-d');
+                $date = $date->subDay();
+            }
+
+// Assume $dates_with_profits is the array you fetched from the database
+            foreach ($dates as $date) {
+                $found = false;
+                foreach ($dates_with_profits as $item) {
+                    if ($item['date_only'] === $date) {
+                        $found = true;
+                        break;
+                    }
+                }
+
+                if (!$found) {
+                    $dates_with_profits[] = [
+                        'date_only' => $date,
+                        'total_cost' => '0.00'
+                    ];
+                }
+            }
+            $dates_with_profits = $dates_with_profits->toArray();
+            usort($dates_with_profits, function($a, $b) {
+                return strtotime($a['date_only']) - strtotime($b['date_only']);
+            });
+
+            return $this->returnData('profits', $dates_with_profits);
+        }
+    }
+/*
+    public function profits_Monthly(){
+
+//        $start_date = now()->subMonth()->startOfDay()->format('Y-m-d H:i:s');
+        $start_date = '2023-03-30';
+//        $end_date = now()->endOfDay()->format('Y-m-d H:i:s');
+        $end_date = '2023-04-30';
+        $supplier_id=Auth::guard('supplier-api')->user()->id;
+        $parking_id=Parking::where('supplier_id',$supplier_id)->select('id')->first();
+        if ($parking_id) {
+            $profits = DB::select("
+            SELECT
+              dates.date_only AS date_only,
+              COALESCE(SUM(payments.cost), 0) AS total_cost
+            FROM (
+              SELECT DATE(?) + INTERVAL a DAY AS date_only
+              FROM (
+                SELECT @a := @a + 1 AS a
+                FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) AS a
+                CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) AS b
+                CROSS JOIN (SELECT @a := -1) AS init
+                LIMIT 31
+              ) AS days
+            ) AS dates
+            LEFT JOIN payments
+              ON DATE(payments.created_at) = dates.date_only
+              AND payments.parking_id = ?
+              AND payments.created_at BETWEEN ? AND ?
+            GROUP BY dates.date_only
+        ", [$start_date, $parking_id->id, $start_date, $end_date]);
+            return $this->returnData('profits', $profits);
+        }
+    }
+*/
+   /* public function each_Month_Profits(){
+        $supplier_id=Auth::guard('supplier-api')->user()->id;
+        $parking_id=Parking::where('supplier_id',$supplier_id)->select('id')->first();
+        if ($parking_id){
+            $query="SELECT MONTH(payments.created_at) as month, SUM(payments.cost) as total_payments FROM payments WHERE payments.parking_id =1 AND YEAR(payments.created_at) = YEAR(CURDATE()) GROUP BY MONTH(payments.created_at)";
+            $each_month_profits=DB::select($query);
+            return $this->returnData('profits', $each_month_profits);
+        }
+    }*/
+    public function each_Month_Profits()
+    {
+        $supplier_id = Auth::guard('supplier-api')->user()->id;
+        $parking_id=Parking::where('supplier_id',$supplier_id)->select('id')->first();
+        if ($parking_id){
+            $profits = DB::table('payments')
+                ->selectRaw('MONTH(created_at) as month, SUM(cost) as total_payments')
+                ->where('parking_id', $parking_id->id)
+                ->whereYear('created_at', '=', date('Y'))
+                ->groupBy('month')
+                ->get();
+
+            // Convert stdClass objects to arrays
+            $profits = json_decode(json_encode($profits), true);
+
+            $all_months = range(1,12);
+            $profits_months = array_column($profits, 'month');
+            $missing_months = array_diff($all_months, $profits_months);
+
+            foreach($missing_months as $month){
+                $profits[] = ['month' => $month, 'total_payments' => 0];
+            }
+
+            usort($profits, function($a, $b) {
+                return $a['month'] - $b['month'];
+            });
+
+            return $this->returnData('profits', $profits);
+        }
+    }
+    public function profits_Weekly(){
+        $supplier_id=Auth::guard('supplier-api')->user()->id;
+        $parking_id=Parking::where('supplier_id',$supplier_id)->select('id')->first();
+        $previous_friday = Carbon::now()->previous(Carbon::FRIDAY);
+        if ($parking_id)
+        {
+            $profits = Payment::select(DB::raw('DATE(created_at) as date_only'), DB::raw('SUM(cost) as total_cost'))
+                ->where('parking_id', $parking_id->id)->where('created_at','<',$previous_friday->toDate())->where('created_at','>',$previous_friday->subDays(7)->toDate())
+                ->groupBy('date_only')
+                ->get();
+            return $this->returnData('profits', $profits);
+        }
+    }
 
 }

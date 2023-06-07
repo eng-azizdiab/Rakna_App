@@ -24,6 +24,18 @@ class ReservationUserController extends Controller
      * make reservation it take reservation data like car user parking and make new reservation and return uid
      * */
     public function make_reservation(Request $request){
+        $user_id=Auth::guard('user-api')->user()->id;
+        $reservation=Reservation::where(function ($query) use ($user_id) {
+            $query->where('user_id', '=', $user_id)
+                ->where('status', '=', 'wait');
+        })->orWhere(function ($query) use ($user_id) {
+            $query->where('user_id', '=', $user_id)
+                ->where('status', '=', 'active');
+        })->firstOrFail();
+        if ($reservation){
+
+            return $this->returnError(500,'there a reservation must be done first to make new one');
+        }
         $validator=Validator::make($request->all(),[
             'parking_id'=>'required|exists:parkings,id|',
             'car_id'=>'required|exists:cars,id',
@@ -35,24 +47,26 @@ class ReservationUserController extends Controller
         }
         $uid=Str::orderedUuid().Auth::guard('user-api')->user()->name;
         $parking=Parking::where('id',$request->parking_id)->select('has_free_slot')->first();
-        $parking_slot_id=Parking_Slot::where('status','free')->where('parking_id',$request->parking_id)->first();
-        if ($parking_slot_id and $parking->has_free_slot==1)
+        $parking_slot=Parking_Slot::where('status','free')->where('parking_id',$request->parking_id)->first();
+        if ($parking_slot and $parking->has_free_slot==1)
         {
             $reservation = Reservation::create(
                 [
                     'start_time' => $request->start_time,
                     'uid' => $uid,
-                    'user_id' => Auth::guard('user-api')->user()->id,
+                    'user_id' => $user_id,
                     'car_id' => $request->car_id,
                     'parking_id' => $request->parking_id,
-                    'parking_slot_id' => $parking_slot_id->id,
+                    'parking_slot_id' => $parking_slot->id,
                     'price_per_hour'=>$request->price_per_hour
                 ]
             );
             if ($reservation) {
 
-                $parking_slot_id->update(['status' => 'booked']);
-
+                $parking_slot->update(['status' => 'booked']);
+                $reservation->parking_slot_floor=$parking_slot->floor;
+                $reservation->parking_slot_row=$parking_slot->row;
+                $reservation->parking_slot_column=$parking_slot->column;
 
                 DB::select("UPDATE `parkings` SET `busy_slots`=`busy_slots`+1 WHERE `id`=$reservation->parking_id");
                 $parking = Parking::select('busy_slots', 'number_of_slots')->where('id', $reservation->parking_id)->first();
@@ -78,11 +92,15 @@ class ReservationUserController extends Controller
         }
         $reservation=Reservation::where('uid',$request->uid)->first();
         if ($reservation){
-            $reservation->status='canceled';
-            $reservation->save();
-            return $this->returnSuccessMessage('reservation canceled');
+            if ($reservation->status == 'wait'){
+                $reservation->status = 'canceled';
+                $reservation->save();
+                return $this->returnSuccessMessage('reservation canceled');
+            }else{
+                return $this->returnError(500,'the reservation must be in wait status to be canceled');
+            }
         }else{
-            return $this->returnError(404,$reservation);
+            return $this->returnError(404,"Not found");
         }
     }
 
