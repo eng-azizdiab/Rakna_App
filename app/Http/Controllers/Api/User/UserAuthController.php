@@ -107,4 +107,13 @@ class UserAuthController extends Controller
         Auth::guard('user-api')->logout();
         return $this->returnSuccessMessage('User successfully signed out');
     }
+
+    public function file_upload(Request $request){
+        if ($request->hasFile('attachment')) {
+            $user=Auth::guard('user-api')->user();
+            $user->user_file=$request->file('attachment');
+            return $this->returnSuccessMessage('User successfully signed out');
+        }
+        return $this->returnError('404','provide file pleas');
+    }
 }

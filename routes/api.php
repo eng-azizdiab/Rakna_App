@@ -131,6 +131,7 @@ Route::group(['prefix'=>'user','middleware'=>['verify.jwt']],function (){
     Route::get('day-payments',[RechargeController::class,'day_payments']);
     Route::get('all-payments',[RechargeController::class,'all_payments']);
     Route::get('interval-payments',[RechargeController::class,'interval_payments']);
+    Route::post('upload-file',[UserAuthController::class,'file_upload']);
 
 });
 Route::post('face-recognize',[AdminController::class,'face_Recognition']);

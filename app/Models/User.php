@@ -3,17 +3,21 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Http\Interfaces\AttachmentsManagerInterface;
+use App\Http\Traits\AttachmentsManager;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Http\File;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 use Laravel\Cashier\Billable;
 
 
-class User extends Authenticatable implements JWTSubject
+class User extends Authenticatable implements JWTSubject,AttachmentsManagerInterface
 {
-    use HasApiTokens, HasFactory, Notifiable,Billable;
+    use HasApiTokens, HasFactory, Notifiable,Billable,AttachmentsManager;
 
     /**
      * The attributes that are mass assignable.
@@ -74,6 +78,38 @@ class User extends Authenticatable implements JWTSubject
     }
     public function reservations(){
         return $this->hasMany(Reservation::class,'user_id','id');
+    }
+
+    public function getFolderName(): string
+    {
+        return $this->getTable();
+    }
+
+    public function attachments()
+    {
+        return $this->morphMany('App\Models\Attachment', 'attachmentable');
+    }
+
+    public function setUserFileAttribute(File|UploadedFile $file)
+    {
+
+        $lastAttachment = $this->latest_attachment()->value('file_name');
+
+        $attachment = $this->uploadAttachment($file, $lastAttachment);
+        $this->attachments()->updateOrCreate([
+            'attachmentable_id'=>$this->id,
+            'attachmentable_type'=>self::class,
+        ],[
+            'file_name'=>$attachment,
+            'client_name'=>$file->getClientOriginalName()
+        ]);
+    }
+    public function latest_attachment(){
+        return $this->attachments()->where('attribute', '=',null)->latest();
+    }
+    public function getUserFileUrlAttribute()
+    {
+        return $this->getAttachment($this->latest_attachment()->value('file_name'));
     }
 
 
